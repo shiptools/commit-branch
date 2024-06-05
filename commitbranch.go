@@ -1,9 +1,10 @@
-package main
+package cb
 
 import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 
@@ -12,7 +13,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func main() {
+func Main() {
 	var rebaseParent string
 
 	app := &cli.App{
@@ -47,7 +48,10 @@ func main() {
 
 					// Fetch latest parent branch
 					// TODO: Should look for upstream name
-					// err = exec.Command("git", "fetch", "origin", rebaseParent).Run()
+					err = execInteractive(fmt.Sprintf("git fetch origin %s", rebaseParent))
+					if err != nil {
+						return err;
+					}
 
 					// homeDir, err := os.UserHomeDir()
 					// if err != nil {
@@ -84,11 +88,29 @@ func main() {
 					}
 
 					// Validate Commit Branch Stack
+					// branchIter, err := repo.Branches()
+					// if err != nil {
+					// 	return wrapErr(err, "all branched error")
+					// }
+					// cfg, _ := repo.Config()
+					// fmt.Printf("config: %+v\n", cfg)
+					// branchIter.ForEach(func(r *plumbing.Reference) error {
+					// 	fmt.Printf("name: %s, type: %s\n", r.Name(), r.Type())
+					// 	return nil;
+					// })
+
 					branches, err := findStackBranches(repo, targetBranch)
 					if err != nil {
 						return err
 					}
-					fmt.Printf("%+v\n", branches)
+
+					// Merge Branches
+					branch := branches[0]
+					// Stash changes before rebases
+					execInteractive("git stash")
+					defer execInteractive("git stash pop")
+					println(fmt.Sprintf("git rebase main %s", branch.Name))
+					execInteractive(fmt.Sprintf("git rebase main %s", branch.Name))
 
 					// worktree.Fet
 					// mainBranch := plumbing.NewBranchReferenceName(rebaseParent)
@@ -117,7 +139,9 @@ func findStackBranches(repo *git.Repository, targetBranch string) (branches []*c
 		return
 	}
 
-	for nextStackCount := range stackCount {
+	// fmt.Printf("stackCount: %d\n", stackCount)
+	for i := range stackCount {
+		nextStackCount := i + 1
 		branchName := branchBaseName + "-" + strconv.Itoa(nextStackCount)
 		branch, err := repo.Branch(branchName)
 		if err != nil {
@@ -154,4 +178,13 @@ func validateCBName(name string) (stackCount int, branchBaseName string, err err
 
 func wrapErr(err error, desc string, format ...any) error {
 	return fmt.Errorf("%s: %w", fmt.Sprintf(desc, format), err)
+}
+
+func execInteractive(command string) error {
+	// cmd := exec.Command("bash", "-c", "/usr/bin/python3")
+	cmd := exec.Command("bash", "-c", command)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }

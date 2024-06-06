@@ -14,6 +14,7 @@ import (
 
 func Main() {
 	var rebaseParent string
+	var shouldPush bool
 
 	app := &cli.App{
 		Name:  "cb",
@@ -29,6 +30,11 @@ func Main() {
 						Aliases:     []string{"p"},
 						Usage:       "Parent branch to rebase from",
 						Destination: &rebaseParent,
+					},
+					&cli.BoolFlag{
+						Name:        "push",
+						Usage:       "Push changes upstream",
+						Destination: &shouldPush,
 					},
 				},
 				Action: func(ctx *cli.Context) error {
@@ -108,21 +114,22 @@ func Main() {
 						}
 
 						// Remove the previous branch commit
-						if (prevBranch != nil) {
-							execInteractive(fmt.Sprintf("git rebase --onto %s %s %s", prevBranchName, prevBranch.commitSha, stackBranch.branch.Name))	
+						if prevBranch != nil {
+							execInteractive(fmt.Sprintf("git rebase --onto %s %s %s", prevBranchName, prevBranch.commitSha, stackBranch.branch.Name))
 						} else {
 							execInteractive(fmt.Sprintf("git rebase %s %s", prevBranchName, stackBranch.branch.Name))
 						}
 					}
 
-					// worktree.Fet
-					// mainBranch := plumbing.NewBranchReferenceName(rebaseParent)
-					// err = worktree.Checkout(&git.CheckoutOptions{
-					// 	Branch: mainBranch,
-					// })
+					// Push changes, if specified
+					if shouldPush {
+						branchNames := make([]string, 0, len(branches))
+						for _, stackBranch := range branches {
+							branchNames = append(branchNames, stackBranch.branch.Name)
+						}
+						execInteractive(fmt.Sprintf("git push  --atomic --force-with-lease %s", strings.Join(branchNames, " ")))
+					}
 
-					// branch, err := repo.Branch(rebaseParent)
-					// branch.Rebase
 					return nil
 				},
 			},
@@ -147,6 +154,7 @@ func findStackBranches(repo *git.Repository, targetBranch string) (branches []*S
 	if err != nil {
 		return
 	}
+	branches = make([]*StackBranch, 0, stackCount)
 
 	// fmt.Printf("stackCount: %d\n", stackCount)
 	for i := range stackCount {

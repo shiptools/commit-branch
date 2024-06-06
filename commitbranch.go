@@ -2,7 +2,6 @@ package cb
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"strconv"
@@ -48,9 +47,10 @@ func Main() {
 
 					// Fetch latest parent branch
 					// TODO: Should look for upstream name
-					err = execInteractive(fmt.Sprintf("git fetch origin %s", rebaseParent))
+					upstream := "origin"
+					err = execInteractive(fmt.Sprintf("git fetch %s %s", upstream, rebaseParent))
 					if err != nil {
-						return err;
+						return err
 					}
 
 					// homeDir, err := os.UserHomeDir()
@@ -88,29 +88,32 @@ func Main() {
 					}
 
 					// Validate Commit Branch Stack
-					// branchIter, err := repo.Branches()
-					// if err != nil {
-					// 	return wrapErr(err, "all branched error")
-					// }
-					// cfg, _ := repo.Config()
-					// fmt.Printf("config: %+v\n", cfg)
-					// branchIter.ForEach(func(r *plumbing.Reference) error {
-					// 	fmt.Printf("name: %s, type: %s\n", r.Name(), r.Type())
-					// 	return nil;
-					// })
-
 					branches, err := findStackBranches(repo, targetBranch)
 					if err != nil {
 						return err
 					}
 
-					// Merge Branches
-					branch := branches[0]
 					// Stash changes before rebases
 					execInteractive("git stash")
 					defer execInteractive("git stash pop")
-					println(fmt.Sprintf("git rebase main %s", branch.Name))
-					execInteractive(fmt.Sprintf("git rebase main %s", branch.Name))
+					// Rebase Branches
+					for i, stackBranch := range branches {
+						var prevBranchName string
+						var prevBranch *StackBranch
+						if i == 0 {
+							prevBranchName = fmt.Sprintf("%s/%s", upstream, rebaseParent)
+						} else {
+							prevBranch = branches[i-1]
+							prevBranchName = prevBranch.branch.Name
+						}
+
+						// Remove the previous branch commit
+						if (prevBranch != nil) {
+							execInteractive(fmt.Sprintf("git rebase --onto %s %s %s", prevBranchName, prevBranch.commitSha, stackBranch.branch.Name))	
+						} else {
+							execInteractive(fmt.Sprintf("git rebase %s %s", prevBranchName, stackBranch.branch.Name))
+						}
+					}
 
 					// worktree.Fet
 					// mainBranch := plumbing.NewBranchReferenceName(rebaseParent)
@@ -128,12 +131,18 @@ func Main() {
 
 	err := app.Run(os.Args)
 	if err != nil {
-		log.Fatal(err)
+		fmt.Println(err)
+		os.Exit(1)
 	}
 }
 
+type StackBranch struct {
+	branch    *config.Branch
+	commitSha string
+}
+
 // Finds stack branches in ascending order
-func findStackBranches(repo *git.Repository, targetBranch string) (branches []*config.Branch, err error) {
+func findStackBranches(repo *git.Repository, targetBranch string) (branches []*StackBranch, err error) {
 	stackCount, branchBaseName, err := validateCBName(targetBranch)
 	if err != nil {
 		return
@@ -147,7 +156,48 @@ func findStackBranches(repo *git.Repository, targetBranch string) (branches []*c
 		if err != nil {
 			return branches, wrapErr(err, "error finding branch `%s` in working tree", branchName)
 		}
-		branches = append(branches, branch)
+		// Get last commit in branch.
+		// Every branch should have one commit.
+		logsToFetch := "1"
+		if nextStackCount > 1 {
+			logsToFetch = "2"
+		}
+		cmd := exec.Command("git", "log", "-n", logsToFetch, "--pretty=format:%H", branchName)
+		fmt.Printf("$ %s\n", cmd.String())
+		logOut, err := cmd.Output()
+		if err != nil {
+			return branches, wrapErr(err, "error fetching branch logs")
+		}
+		fmt.Printf("out: %s, err: %s\n", string(logOut), err)
+		logs := strings.Split(strings.TrimSpace(string(logOut)), "\n")
+		var branchCommitSha string
+		if nextStackCount > 1 {
+			currBranchSha := logs[0]
+			prevBranchSha := logs[1]
+			prevBranch := branches[i-1]
+			fmt.Printf("prevBranchSha: %s, currBranchSha: %s, prevBranch: %s, branch: %s\n", prevBranchSha, currBranchSha, prevBranch.branch.Name, branchName)
+
+			if prevBranchSha != prevBranch.commitSha {
+				// TODO: Could give the user the option to discord the commit
+				// If they can verify nothing is missing.
+				return branches, fmt.Errorf(
+					"branch `%s` previous commit (%s) does not match previous branch `%s` commit (%s).\nEach branch should have 1 commit",
+					branchName,
+					prevBranchSha,
+					prevBranch.branch.Name,
+					prevBranch.commitSha,
+				)
+			}
+			branchCommitSha = currBranchSha
+		} else {
+			branchCommitSha = logs[0]
+		}
+		fmt.Printf("Branch sha: %s\n", branchCommitSha)
+
+		branches = append(branches, &StackBranch{
+			branch:    branch,
+			commitSha: branchCommitSha,
+		})
 	}
 
 	return
@@ -182,7 +232,8 @@ func wrapErr(err error, desc string, format ...any) error {
 
 func execInteractive(command string) error {
 	// cmd := exec.Command("bash", "-c", "/usr/bin/python3")
-	cmd := exec.Command("bash", "-c", command)
+	fmt.Printf("$ %s\n", command)
+	cmd := exec.Command("sh", "-c", command)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

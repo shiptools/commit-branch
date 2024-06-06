@@ -235,7 +235,7 @@ func validateCBName(name string) (stackCount int, branchBaseName string, err err
 }
 
 func wrapErr(err error, desc string, format ...any) error {
-	return fmt.Errorf("%s: %w", fmt.Sprintf(desc, format), err)
+	return fmt.Errorf("%s: %w", fmt.Sprintf(desc, format...), err)
 }
 
 func execInteractive(command string) error {

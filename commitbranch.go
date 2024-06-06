@@ -163,19 +163,19 @@ func findStackBranches(repo *git.Repository, targetBranch string) (branches []*S
 			logsToFetch = "2"
 		}
 		cmd := exec.Command("git", "log", "-n", logsToFetch, "--pretty=format:%H", branchName)
-		fmt.Printf("$ %s\n", cmd.String())
+		// fmt.Printf("$ %s\n", cmd.String())
 		logOut, err := cmd.Output()
 		if err != nil {
 			return branches, wrapErr(err, "error fetching branch logs")
 		}
-		fmt.Printf("out: %s, err: %s\n", string(logOut), err)
+		// fmt.Printf("out: %s, err: %s\n", string(logOut), err)
 		logs := strings.Split(strings.TrimSpace(string(logOut)), "\n")
 		var branchCommitSha string
 		if nextStackCount > 1 {
 			currBranchSha := logs[0]
 			prevBranchSha := logs[1]
 			prevBranch := branches[i-1]
-			fmt.Printf("prevBranchSha: %s, currBranchSha: %s, prevBranch: %s, branch: %s\n", prevBranchSha, currBranchSha, prevBranch.branch.Name, branchName)
+			// fmt.Printf("prevBranchSha: %s, currBranchSha: %s, prevBranch: %s, branch: %s\n", prevBranchSha, currBranchSha, prevBranch.branch.Name, branchName)
 
 			if prevBranchSha != prevBranch.commitSha {
 				// TODO: Could give the user the option to discord the commit
@@ -192,7 +192,7 @@ func findStackBranches(repo *git.Repository, targetBranch string) (branches []*S
 		} else {
 			branchCommitSha = logs[0]
 		}
-		fmt.Printf("Branch sha: %s\n", branchCommitSha)
+		// fmt.Printf("Branch sha: %s\n", branchCommitSha)
 
 		branches = append(branches, &StackBranch{
 			branch:    branch,

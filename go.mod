@@ -1,4 +1,4 @@
-module github.com/shiptools/commitbranch
+module github.com/shiptools/commit-branch
 
 go 1.22
 

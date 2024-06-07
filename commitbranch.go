@@ -127,7 +127,7 @@ func Main() {
 						for _, stackBranch := range branches {
 							branchNames = append(branchNames, stackBranch.branch.Name)
 						}
-						execInteractive(fmt.Sprintf("git push  --atomic --force-with-lease %s", strings.Join(branchNames, " ")))
+						execInteractive(fmt.Sprintf("git push  --atomic --force-with-lease %s %s", upstream, strings.Join(branchNames, " ")))
 					}
 
 					return nil
